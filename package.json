@@ -18,7 +18,7 @@
     "cheerio": "^1.1.2",
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.1",
-    "google-tts-api": "^0.0.6",
+    "google-tts-api": "^2.0.2",
     "mongoose": "^8.18.0"
   }
 }

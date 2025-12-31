@@ -1,7 +1,8 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
-const googleTTS = require('google-tts-api');
+const { getAudioUrl } = require('google-tts-api');
 const { createErrorEmbed } = require('../../utils/embed');
+const axios = require('axios'); // NEW: We use this to download securely
 const config = require('../../config/config.json');
 
 // Per-guild TTS queues and state
@@ -23,9 +24,12 @@ const LANGUAGES = {
     'it': 'Italian'
 };
 
+// Standard browser User-Agent to trick Google
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
 module.exports = {
     name: 'tts',
-    description: 'Text-to-speech in voice channel with queue support',
+    description: 'Text-to-speech in voice channel',
     usage: '[lang:code] <text> | Example: !tts Hello or !tts lang:hi नमस्ते',
     aliases: ['speak', 'say'],
     user_perm: [],
@@ -212,7 +216,26 @@ async function playQueue(guildId, client) {
 
     try {
         // Get audio URL from Google TTS
-        const audioUrl = await googleTTS(currentItem.text, currentItem.lang, 1, 10000);
+        const audioUrl = getAudioUrl(currentItem.text, {
+            lang: currentItem.lang,
+            slow: false,
+            host: 'https://translate.google.com',
+        });
+
+        // Download audio via axios with browser headers (bypasses AWS IP blocking)
+        const audioResponse = await axios({
+            method: 'GET',
+            url: audioUrl,
+            responseType: 'stream',
+            headers: {
+                'User-Agent': USER_AGENT,
+                'Accept': 'audio/mpeg, audio/*;q=0.9, */*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://translate.google.com/',
+                'Origin': 'https://translate.google.com'
+            },
+            timeout: 10000
+        });
 
         // Create or reuse connection
         if (!queue.connection || queue.connection.state.status === VoiceConnectionStatus.Destroyed) {
@@ -264,8 +287,8 @@ async function playQueue(guildId, client) {
             });
         }
 
-        // Create and play resource
-        const resource = createAudioResource(audioUrl, {
+        // Create audio resource from the downloaded stream
+        const resource = createAudioResource(audioResponse.data, {
             inputType: StreamType.Arbitrary,
             inlineVolume: true 
         });
