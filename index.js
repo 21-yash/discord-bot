@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const Config = require('./models/Config');
 require('dotenv').config();
 
-process.env.FFMPEG_PATH = require('ffmpeg-static');
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,

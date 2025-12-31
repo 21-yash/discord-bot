@@ -265,7 +265,10 @@ async function playQueue(guildId, client) {
         }
 
         // Create and play resource
-        const resource = createAudioResource(audioUrl);
+        const resource = createAudioResource(audioUrl, {
+            inputType: StreamType.Arbitrary,
+            inlineVolume: true 
+        });
         queue.player.play(resource);
 
     } catch (error) {
