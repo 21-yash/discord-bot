@@ -40,7 +40,6 @@ client.events = new Collection();
 require('./handlers/eventHandler')(client);
 require('./handlers/commandHandler')(client);
 require('./handlers/errorHandler')(client);
-require('./config/distube')(client);
 
 // Connect to MongoDB
 require('./config/database');

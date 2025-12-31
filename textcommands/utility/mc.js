@@ -1,21 +1,24 @@
 const { exec } = require('child_process');
 
-// 🔒 CONFIGURATION (Edit these!)
-const ADMIN_ID = ['528933845928771594', '676449565808787457', '1040917333788606524', '934409996622528562', '865429497037324338']; // Copy your ID here so only YOU can use it
-const SERVER_PATH = '/home/ubuntu/mc-server'; // The exact folder where bedrock_server is
+// 🔒 CONFIGURATION
+// Your Admin IDs for basic commands (start/stop)
+const ADMIN_IDS = ['528933845928771594', '676449565808787457', '1040917333788606524', '934409996622528562', '865429497037324338'];
+// The ONLY ID allowed to use raw !mc cmd
+const OWNER_ID = '528933845928771594';
+const SERVER_PATH = '/home/ubuntu/mc-server';
 
 module.exports = {
-    name: 'mc', // The command trigger (e.g., !mc)
+    name: 'mc',
     description: 'Control the Minecraft Bedrock Server',
     execute(message, args) {
-        
-        // 1. Security Check
-        if (!ADMIN_ID.includes(message.author.id)) {
+
+        // 1. General Security Check (Anyone in the list can start/stop)
+        if (!ADMIN_IDS.includes(message.author.id)) {
             return message.reply("⛔ **Access Denied:** You are not allowed to use this command.");
         }
 
-        const subCommand = args[0]; // e.g., 'start', 'stop', 'cmd'
-        const input = args.slice(1).join(' '); // For commands like 'say hello'
+        const subCommand = args[0];
+        const input = args.slice(1).join(' ');
 
         // --- STATUS CHECK ---
         if (!subCommand || subCommand === 'status') {
@@ -32,7 +35,6 @@ module.exports = {
         // --- START SERVER ---
         if (subCommand === 'start') {
             message.channel.send("🚀 **Booting up...** (Allow 30s)");
-            // Runs the start.sh script inside a detached screen named 'minecraft'
             exec(`cd ${SERVER_PATH} && screen -dmS minecraft ./start.sh`, (error) => {
                 if (error) return message.reply(`❌ Failed to start: \`\`\`${error.message}\`\`\``);
             });
@@ -42,83 +44,69 @@ module.exports = {
         // --- STOP SERVER ---
         if (subCommand === 'stop') {
             message.channel.send("🛑 **Stopping server...**");
-            // Sends the 'stop' command + Enter key (\r) to the console
-            exec(`screen -S minecraft -p 0 -X stuff "stop\r"`, (error) => {
-                if (error) return message.reply("⚠️ Server is already offline or screen not found.");
+            // FIXED: Using \n instead of \r
+            exec(`screen -S minecraft -p 0 -X stuff "stop\n"`, (error) => {
+                if (error) return message.reply("⚠️ Server is offline or screen not found.");
             });
             return;
         }
 
-        // --- RUN CONSOLE COMMANDS (e.g., !mc cmd op User) ---
+        // --- RAW COMMANDS (OWNER ONLY) ---
         if (subCommand === 'cmd') {
-            if (message.author.id !== '528933845928771594') return message.reply("⛔ **Access Denied:** You are not allowed to use this command.");
-            
-            if (!input) return message.reply("⚠️ You need to type a command. Example: `!mc cmd time set day`");
-            
-            exec(`screen -S minecraft -p 0 -X stuff "${input}\r"`, (error) => {
+            // STRICT check for just YOU
+            if (message.author.id !== OWNER_ID) {
+                return message.reply("⛔ **Access Denied:** Only the owner can run raw commands.");
+            }
+
+            if (!input) return message.reply("⚠️ Type a command. Example: `!mc cmd time set day`");
+
+            // FIXED: Using \n
+            exec(`screen -S minecraft -p 0 -X stuff "${input}\n"`, (error) => {
                 if (error) return message.reply("⚠️ Server is offline.");
-                message.react('✅'); // Reacts with checkmark if sent
+                message.react('✅');
             });
             return;
         }
 
-        // --- LIST ONLINE PLAYERS ---
-        if (subCommand === 'players' || subCommand === 'list' || subCommand === 'online') {
-            // First check if server is online
+        // --- LIST PLAYERS ---
+        if (subCommand === 'players' || subCommand === 'list') {
             exec('screen -list | grep minecraft', (err, stdout) => {
                 if (!stdout || !stdout.includes('minecraft')) {
-                    return message.channel.send("🔴 **Server is OFFLINE** - No players to show.");
+                    return message.channel.send("🔴 **Server is OFFLINE**");
                 }
 
-                // Send 'list' command to the server console
-                exec(`screen -S minecraft -p 0 -X stuff "list\r"`, (error) => {
-                    if (error) return message.reply("⚠️ Failed to send command.");
+                // 1. Send "list" to console (using \n)
+                exec(`screen -S minecraft -p 0 -X stuff "list\n"`);
 
-                    // Wait a moment for the server to respond, then capture the screen
-                    setTimeout(() => {
-                        const tempFile = `/tmp/mc_screen_${Date.now()}.txt`;
-                        
-                        // Capture screen content to a file
-                        exec(`screen -S minecraft -p 0 -X hardcopy ${tempFile}`, (err2) => {
-                            if (err2) return message.reply("⚠️ Failed to read console output.");
+                // 2. Wait 2 second for server to reply, then read the screen
+                setTimeout(() => {
+                    const tempFile = `/tmp/mc_screen_${Date.now()}.txt`;
 
-                            // Read the captured output
-                            exec(`cat ${tempFile} && rm ${tempFile}`, (err3, output) => {
-                                if (err3 || !output) {
-                                    return message.channel.send("⚠️ Could not read player list.");
-                                }
+                    // Capture the screen text to a file
+                    exec(`screen -S minecraft -p 0 -X hardcopy ${tempFile}`, () => {
+                        // Read that file
+                        exec(`tail -n 50 ${tempFile} && rm ${tempFile}`, (err3, output) => {
+                            if (!output) return message.channel.send("⚠️ Could not read console.");
 
-                                // Find the line with player count (format: "There are X/Y players online:")
-                                const lines = output.split('\n').filter(l => l.trim());
-                                let playerInfo = null;
-                                let playerNames = [];
+                            // Parse the output to find "players online"
+                            const lines = output.split('\n').reverse();
+                            let result = "Could not find player list.";
 
-                                for (let i = 0; i < lines.length; i++) {
-                                    const line = lines[i];
-                                    // Bedrock format: "There are 2/10 players online:"
-                                    if (line.includes('players online')) {
-                                        playerInfo = line.trim();
-                                        // Next line might have player names
-                                        if (lines[i + 1] && !lines[i + 1].includes('[')) {
-                                            playerNames = lines[i + 1].split(',').map(n => n.trim()).filter(n => n);
-                                        }
-                                        break;
+                            for (let i = 0; i < lines.length; i++) {
+                                const line = lines[i];
+                                if (line.includes("players online")) {
+                                    result = line.trim(); // Found the line!
+
+                                    if (lines[i - 1] && !lines[i - 1].includes("INFO")) {
+                                        result += "\n" + lines[i - 1].trim();
                                     }
+                                    break;
                                 }
-
-                                if (playerInfo) {
-                                    let response = `🎮 **${playerInfo}**`;
-                                    if (playerNames.length > 0) {
-                                        response += `\n👥 **Players:** ${playerNames.join(', ')}`;
-                                    }
-                                    message.channel.send(response);
-                                } else {
-                                    message.channel.send("🎮 **0 players online** (or couldn't parse output)");
-                                }
-                            });
+                            }
+                            message.channel.send(`🎮 **${result}**`);
                         });
-                    }, 500); // 500ms delay to let server respond
-                });
+                    });
+                }, 2000); // Wait 2000ms (2 second)
             });
             return;
         }

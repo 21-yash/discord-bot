@@ -212,7 +212,7 @@ async function playQueue(guildId, client) {
 
     try {
         // Get audio URL from Google TTS
-        const audioUrl = await googleTTS(currentItem.text, currentItem.lang, 1);
+        const audioUrl = await googleTTS(currentItem.text, currentItem.lang, 1, 10000);
 
         // Create or reuse connection
         if (!queue.connection || queue.connection.state.status === VoiceConnectionStatus.Destroyed) {
