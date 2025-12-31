@@ -1,0 +1,28 @@
+{
+  "name": "codes",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.18.0",
+    "@distube/soundcloud": "^2.0.4",
+    "@distube/spotify": "^2.0.2",
+    "@distube/youtube": "^1.0.4",
+    "@distube/yt-dlp": "^2.0.1",
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.11.0",
+    "canvas": "^3.2.0",
+    "cheerio": "^1.1.2",
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1",
+    "google-tts-api": "^0.0.6",
+    "mongoose": "^8.18.0"
+  }
+}

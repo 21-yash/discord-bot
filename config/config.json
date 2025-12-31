@@ -1,0 +1,31 @@
+{
+    "prefix": "!",
+    "ownerId": "528933845928771594",
+    "colors": {
+        "success": "#00ff00",
+        "error": "#ff0000",
+        "warning": "#ffff00",
+        "info": "#0099ff",
+        "primary": "#7289da",
+        "secondary": "#99aab5"
+    },
+    "emojis": {
+        "success": "<:correct:898606564754223174>",
+        "error": "<:wrong:918906485390594050>",
+        "warning": "⚠️",
+        "info": "ℹ️",
+        "loading": "⏳",
+        "banned": "🔨",
+        "unbanned": "🔓",
+        "disabled": "🚫",
+        "enabled": "✅",
+        "ping": "🏓",
+        "help": "❓",
+        "tip": "💡"
+    },
+    "cooldowns": {
+        "blacklistMessage": 1800000
+    },
+    "defaultVolume": 0.5,
+    "voteThreshold": 0.5
+}
