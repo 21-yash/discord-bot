@@ -2,7 +2,7 @@ const { exec } = require('child_process');
 
 // 🔒 CONFIGURATION
 // Your Admin IDs for basic commands (start/stop)
-const ADMIN_IDS = ['528933845928771594', '676449565808787457', '1040917333788606524', '934409996622528562', '865429497037324338'];
+const ADMIN_IDS = ['528933845928771594', '676449565808787457', '1040917333788606524', '934409996622528562', '865429497037324338', '952603031315316847'];
 // The ONLY ID allowed to use raw !mc cmd
 const OWNER_ID = '528933845928771594';
 const SERVER_PATH = '/home/ubuntu/mc-server';
@@ -34,6 +34,8 @@ module.exports = {
 
         // --- START SERVER ---
         if (subCommand === 'start') {
+            if (OWNER_ID !== message.author.id) return;
+
             message.channel.send("🚀 **Booting up...** (Allow 30s)");
             exec(`cd ${SERVER_PATH} && screen -dmS minecraft ./start.sh`, (error) => {
                 if (error) return message.reply(`❌ Failed to start: \`\`\`${error.message}\`\`\``);
@@ -43,8 +45,9 @@ module.exports = {
 
         // --- STOP SERVER ---
         if (subCommand === 'stop') {
+            if (OWNER_ID !== message.author.id) return;
+
             message.channel.send("🛑 **Stopping server...**");
-            // FIXED: Using \n instead of \r
             exec(`screen -S minecraft -p 0 -X stuff "stop\n"`, (error) => {
                 if (error) return message.reply("⚠️ Server is offline or screen not found.");
             });
@@ -60,10 +63,39 @@ module.exports = {
 
             if (!input) return message.reply("⚠️ Type a command. Example: `!mc cmd time set day`");
 
-            // FIXED: Using \n
-            exec(`screen -S minecraft -p 0 -X stuff "${input}\n"`, (error) => {
-                if (error) return message.reply("⚠️ Server is offline.");
-                message.react('✅');
+            // First check if server is online
+            exec('screen -list | grep minecraft', (err, stdout) => {
+                if (!stdout || !stdout.includes('minecraft')) {
+                    return message.reply("⚠️ Server is offline.");
+                }
+
+                // Send the command
+                exec(`screen -S minecraft -p 0 -X stuff "${input}\n"`, (error) => {
+                    if (error) return message.reply("⚠️ Failed to send command.");
+
+                    // Wait and capture the response
+                    setTimeout(() => {
+                        const tempFile = `/tmp/mc_cmd_${Date.now()}.txt`;
+                        
+                        exec(`screen -S minecraft -p 0 -X hardcopy ${tempFile}`, () => {
+                            exec(`tail -n 20 ${tempFile} && rm ${tempFile}`, (err2, output) => {
+                                if (!output) {
+                                    return message.reply("✅ Command sent! (Could not capture response)");
+                                }
+
+                                // Find relevant response lines (last few non-empty lines)
+                                const lines = output.split('\n').filter(l => l.trim());
+                                const relevantLines = lines.slice(-5).join('\n').trim();
+
+                                if (relevantLines.length > 0 && relevantLines.length < 1900) {
+                                    message.reply(`✅ **Command sent:** \`${input}\`\n\`\`\`\n${relevantLines}\n\`\`\``);
+                                } else {
+                                    message.reply(`✅ **Command sent:** \`${input}\``);
+                                }
+                            });
+                        });
+                    }, 2000); // Wait 2 second for server to process
+                });
             });
             return;
         }
