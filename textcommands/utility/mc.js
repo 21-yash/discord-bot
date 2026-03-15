@@ -1,8 +1,9 @@
 const { exec } = require('child_process');
+const cooldowns = new Set();
 
 // 🔒 CONFIGURATION
 // Your Admin IDs for basic commands (start/stop)
-const ADMIN_IDS = ['528933845928771594', '676449565808787457', '1040917333788606524', '934409996622528562', '865429497037324338', '952603031315316847'];
+const ADMIN_IDS = ['528933845928771594', '676449565808787457', '934409996622528562'];
 // The ONLY ID allowed to use raw !mc cmd
 const OWNER_ID = '528933845928771594';
 const SERVER_PATH = '/home/ubuntu/mc-server';
@@ -12,13 +13,15 @@ module.exports = {
     description: 'Control the Minecraft Bedrock Server',
     execute(message, args) {
 
-        // 1. General Security Check (Anyone in the list can start/stop)
-        if (!ADMIN_IDS.includes(message.author.id)) {
-            return message.reply("⛔ **Access Denied:** You are not allowed to use this command.");
-        }
-
         const subCommand = args[0];
         const input = args.slice(1).join(' ');
+
+        // --- COOLDOWN CHECK ---
+        if (cooldowns.has(message.author.id)) {
+            return message.reply("⏳ **Slow down!** Please wait 30 seconds between commands.");
+        }
+        cooldowns.add(message.author.id);
+        setTimeout(() => cooldowns.delete(message.author.id), 30000); // 30 second cooldown
 
         // --- STATUS CHECK ---
         if (!subCommand || subCommand === 'status') {
@@ -33,21 +36,58 @@ module.exports = {
         }
 
         // --- START SERVER ---
-        if (subCommand === 'start') {
-            if (OWNER_ID !== message.author.id) return;
+        if (subCommand === 'start') {  
+            if (!ADMIN_IDS.includes(message.author.id)) {
+                return message.reply("⛔ **Access Denied:** You are not allowed to use this command.");
+            }
 
-            message.channel.send("🚀 **Booting up...** (Allow 30s)");
-            exec(`cd ${SERVER_PATH} && screen -dmS minecraft ./start.sh`, (error) => {
-                if (error) return message.reply(`❌ Failed to start: \`\`\`${error.message}\`\`\``);
+            // Check if already running first
+            exec('screen -list | grep minecraft', (err, stdout) => {
+                if (stdout && stdout.includes('minecraft')) {
+                    return message.reply("⚠️ Server is already running!");
+                }
+
+                message.channel.send("🚀 **Booting up...** I will notify you when it's ready.");
+                
+                exec(`cd ${SERVER_PATH} && screen -dmS minecraft ./start.sh`, (error) => {
+                    if (error) return message.reply(`❌ Failed to launch: \`\`\`${error.message}\`\`\``);
+
+                    // --- POLLING FOR SUCCESS ---
+                    let attempts = 0;
+                    const maxAttempts = 15; // 15 checks * 4s = 60 seconds max wait
+                    
+                    const checkInterval = setInterval(() => {
+                        attempts++;
+                        const tempFile = `/tmp/mc_boot_check_${Date.now()}.txt`;
+
+                        // Capture screen to see if "Server started" or "Player connected" style logs appear
+                        exec(`screen -S minecraft -p 0 -X hardcopy ${tempFile}`, () => {
+                            exec(`cat ${tempFile} && rm ${tempFile}`, (err2, output) => {
+                                // Bedrock servers usually print "Server started." or "IPv4 supported" when ready
+                                if (output && (output.includes("Server started") || output.includes("Level Name"))) {
+                                    clearInterval(checkInterval);
+                                    return message.channel.send("✅ **Server successfully booted up!** Enjoy your game.");
+                                }
+
+                                if (attempts >= maxAttempts) {
+                                    clearInterval(checkInterval);
+                                    return message.channel.send("⚠️ **Boot Update:** The server is taking a long time. It might be up, but I couldn't confirm it via logs.");
+                                }
+                            });
+                        });
+                    }, 4000); // Check every 4 seconds
+                });
             });
             return;
         }
 
         // --- STOP SERVER ---
         if (subCommand === 'stop') {
-            if (OWNER_ID !== message.author.id) return;
+            if (!ADMIN_IDS.includes(message.author.id)) {
+                return message.reply("⛔ **Access Denied:** You are not allowed to use this command.");
+            }
 
-            message.channel.send("🛑 **Stopping server...**");
+            message.channel.send("🛑 **Server Stopped**");
             exec(`screen -S minecraft -p 0 -X stuff "stop\n"`, (error) => {
                 if (error) return message.reply("⚠️ Server is offline or screen not found.");
             });
